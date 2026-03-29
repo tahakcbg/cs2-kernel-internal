@@ -1,0 +1,26 @@
+# Build outputs
+bin/
+build/
+*.obj
+*.pdb
+*.ilk
+*.log
+*.recipe
+*.tlog/
+
+# Drivers
+*.sys
+*.dll
+!payload.dll
+
+# Probe/test files
+probe_cormem.*
+imgui_vs.h
+imgui_ps.h
+imgui_vs.hlsl
+imgui_ps.hlsl
+
+# VS files
+.vs/
+*.user
+*.bak

@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="injector\injector.vcxproj" Id="a1b2c3d4-0001-0001-0001-000000000001" />
+  <Project Path="payload\payload.vcxproj" Id="a1b2c3d4-0002-0002-0002-000000000002" />
+</Solution>

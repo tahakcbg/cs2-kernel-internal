@@ -17,6 +17,9 @@ build/
 probe_cormem.*
 imgui_vs.h
 imgui_ps.h
+blur_x.h
+blur_y.h
+blur_quad_vs.h
 imgui_vs.hlsl
 imgui_ps.hlsl
 

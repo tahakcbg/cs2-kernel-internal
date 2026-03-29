@@ -3,6 +3,7 @@
 #include <dxgi.h>
 #include <atomic>
 #include "MinHook.h"
+#include "DX11BlurEffect.h"
 #include "imgui.h"
 #include "imgui_impl_win32.h"
 #include "imgui_impl_dx11.h"
@@ -84,6 +85,7 @@ static HRESULT STDMETHODCALLTYPE hooked_present( IDXGISwapChain* swap, UINT sync
             SetWindowLongPtrW( g_hwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>( hooked_wndproc ) )
         );
 
+        blurEffect.Initialize( g_device, g_context );
         g_init = true;
     }
 
@@ -109,7 +111,21 @@ static HRESULT STDMETHODCALLTYPE hooked_present( IDXGISwapChain* swap, UINT sync
 
     if ( g_menu_open )
     {
-        ImGui::Begin( "cs2-imgui", &g_menu_open, ImGuiWindowFlags_AlwaysAutoResize );
+        ImGui::PushStyleColor( ImGuiCol_WindowBg, ImVec4( 0.0f, 0.0f, 0.0f, 0.0f ) );
+        ImGui::Begin( "cs2-kernel-internal", &g_menu_open, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoScrollbar );
+        ImGui::PopStyleColor();
+
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+        ImVec2 wpos = ImGui::GetWindowPos();
+        ImVec2 wsize = ImGui::GetWindowSize();
+
+        blurEffect.BeginBlur( swap );
+        blurEffect.ApplyBlur( drawList, wpos, wsize, 5.0f, ImGui::GetStyle().WindowRounding, ImDrawFlags_RoundCornersAll );
+        blurEffect.EndBlur();
+
+        drawList->AddRectFilled( wpos, ImVec2( wpos.x + wsize.x, wpos.y + wsize.y ),
+            ImColor( 15, 15, 20, 140 ), ImGui::GetStyle().WindowRounding );
+
         ImGui::Text( "injected via kernel driver (physical memory)" );
         ImGui::Text( "DTB-based page table walking" );
         ImGui::Separator( );

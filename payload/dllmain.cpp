@@ -13,18 +13,31 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler( HWND, UINT, WPARAM
 #pragma comment(lib, "dxgi.lib")
 
 using present_fn = HRESULT( STDMETHODCALLTYPE* )( IDXGISwapChain*, UINT, UINT );
+using resize_fn  = HRESULT( STDMETHODCALLTYPE* )( IDXGISwapChain*, UINT, UINT, UINT, DXGI_FORMAT, UINT );
 static present_fn g_original_present = nullptr;
+static resize_fn  g_original_resize = nullptr;
 static WNDPROC    g_original_wndproc = nullptr;
 static bool       g_menu_open = true;
 static std::atomic<bool> g_running{ true };
 
 static LRESULT WINAPI hooked_wndproc( HWND hwnd, UINT msg, WPARAM wp, LPARAM lp )
 {
+    if ( ImGui_ImplWin32_WndProcHandler( hwnd, msg, wp, lp ) )
+        return TRUE;
+
     if ( g_menu_open )
     {
-        ImGui_ImplWin32_WndProcHandler( hwnd, msg, wp, lp );
-        return TRUE;
+        switch ( msg )
+        {
+        case WM_MOUSEMOVE: case WM_LBUTTONDOWN: case WM_LBUTTONUP:
+        case WM_RBUTTONDOWN: case WM_RBUTTONUP: case WM_MBUTTONDOWN: case WM_MBUTTONUP:
+        case WM_MOUSEWHEEL: case WM_MOUSEHWHEEL:
+        case WM_KEYDOWN: case WM_KEYUP: case WM_SYSKEYDOWN: case WM_SYSKEYUP:
+        case WM_CHAR:
+            return TRUE;
+        }
     }
+
     return CallWindowProcW( g_original_wndproc, hwnd, msg, wp, lp );
 }
 
@@ -33,6 +46,13 @@ static ID3D11DeviceContext*     g_context = nullptr;
 static ID3D11RenderTargetView*  g_rtv = nullptr;
 static HWND                     g_hwnd = nullptr;
 static bool                     g_init = false;
+
+static HRESULT STDMETHODCALLTYPE hooked_resize( IDXGISwapChain* swap, UINT buffer_count,
+    UINT width, UINT height, DXGI_FORMAT format, UINT flags )
+{
+    if ( g_rtv ) { g_rtv->Release( ); g_rtv = nullptr; }
+    return g_original_resize( swap, buffer_count, width, height, format, flags );
+}
 
 static HRESULT STDMETHODCALLTYPE hooked_present( IDXGISwapChain* swap, UINT sync, UINT flags )
 {
@@ -66,6 +86,19 @@ static HRESULT STDMETHODCALLTYPE hooked_present( IDXGISwapChain* swap, UINT sync
 
         g_init = true;
     }
+
+    if ( !g_rtv )
+    {
+        ID3D11Texture2D* back_buffer = nullptr;
+        if ( SUCCEEDED( swap->GetBuffer( 0, __uuidof( ID3D11Texture2D ), reinterpret_cast<void**>( &back_buffer ) ) ) )
+        {
+            g_device->CreateRenderTargetView( back_buffer, nullptr, &g_rtv );
+            back_buffer->Release( );
+        }
+    }
+
+    if ( !g_rtv )
+        return g_original_present( swap, sync, flags );
 
     ImGui_ImplDX11_NewFrame( );
     ImGui_ImplWin32_NewFrame( );
@@ -144,6 +177,7 @@ static void init_thread( HMODULE self )
         void** vtable = *reinterpret_cast<void***>( sc );
 
         MH_CreateHook( vtable[8], &hooked_present, reinterpret_cast<void**>( &g_original_present ) );
+        MH_CreateHook( vtable[13], &hooked_resize, reinterpret_cast<void**>( &g_original_resize ) );
         MH_EnableHook( MH_ALL_HOOKS );
 
         sc->Release( );

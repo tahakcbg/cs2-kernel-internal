@@ -321,11 +321,19 @@ int main( )
     if ( !is_admin( ) )
         con.error( "run as administrator." );
 
-    auto pid = find_pid( L"cs2.exe" );
-    if ( !pid )
-        con.error( "cs2.exe not found. launch the game first." );
-
+    con.print( "waiting for cs2.exe..." );
+    uint32_t pid = 0;
+    while ( !pid )
+    {
+        pid = find_pid( L"cs2.exe" );
+        if ( !pid )
+            Sleep( 1000 );
+    }
     con.success( "cs2.exe found (PID {})", pid );
+    con.print( "waiting for game window..." );
+    while ( !FindWindowA( nullptr, "Counter-Strike 2" ) )
+        Sleep( 1000 );
+    Sleep( 10000 );
 
     driver drv;
     auto base_dir = std::filesystem::absolute( L"." ).wstring( );

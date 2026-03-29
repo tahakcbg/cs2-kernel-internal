@@ -44,7 +44,10 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="dllmain.cpp" />
+    <ClCompile Include="hooks.cpp" />
+    <ClCompile Include="menu.cpp" />
     <ClCompile Include="DX11BlurEffect.cpp" />
+    <ClCompile Include="sdk\schema.cpp" />
     <ClCompile Include="imgui\imgui.cpp" />
     <ClCompile Include="imgui\imgui_draw.cpp" />
     <ClCompile Include="imgui\imgui_tables.cpp" />

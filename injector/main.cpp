@@ -333,7 +333,7 @@ int main( )
     con.print( "waiting for game window..." );
     while ( !FindWindowA( nullptr, "Counter-Strike 2" ) )
         Sleep( 1000 );
-    Sleep( 10000 );
+    Sleep( 15000 );
 
     driver drv;
     auto base_dir = std::filesystem::absolute( L"." ).wstring( );

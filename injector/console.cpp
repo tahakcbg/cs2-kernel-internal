@@ -39,9 +39,9 @@ namespace detail {
         return result;
     }
 
-    // cyan/teal theme
-    static constexpr rgb k_accent_light{ 100, 220, 235 };
-    static constexpr rgb k_accent_dark{ 35, 120, 165 };
+    // purple theme
+    static constexpr rgb k_accent_light{ 160, 120, 235 };
+    static constexpr rgb k_accent_dark{ 100, 60, 180 };
 
     static constexpr rgb k_error_light{ 255, 120, 110 };
     static constexpr rgb k_error_dark{ 180, 40, 40 };

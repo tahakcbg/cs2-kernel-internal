@@ -1,9 +1,11 @@
 #include "phys_mem.hpp"
-#include <iostream>
+#include "console.hpp"
 #include <Psapi.h>
 #include <TlHelp32.h>
 
 #pragma comment(lib, "psapi.lib")
+
+extern console con;
 
 static uint64_t get_ntos_base( )
 {
@@ -56,21 +58,15 @@ uint64_t phys_mem::read_phys_u64( uint64_t phys_addr )
 
 uint64_t phys_mem::find_dtb( uint32_t pid )
 {
-    std::cout << "[phys_mem] finding DTB for PID " << pid << "..." << std::endl;
-
-    MEMORYSTATUSEX ms{};
-    ms.dwLength = sizeof( ms );
-    GlobalMemoryStatusEx( &ms );
-    m_max_phys = ms.ullTotalPhys;
-    std::cout << "[phys_mem] physical RAM ceiling: 0x" << std::hex << m_max_phys << std::dec << std::endl;
+    con.print( "scanning for DTB (PID {})...", pid );
 
     auto ntos_base = get_ntos_base( );
     if ( !ntos_base )
     {
-        std::cerr << "[phys_mem] could not get ntoskrnl base." << std::endl;
+        con.warn( "could not get ntoskrnl base." );
         return 0;
     }
-    std::cout << "[phys_mem] ntoskrnl base: 0x" << std::hex << ntos_base << std::dec << std::endl;
+    con.print( "ntoskrnl base: 0x{:X}", ntos_base );
 
     uint64_t system_cr3 = 0;
 
@@ -83,15 +79,7 @@ uint64_t phys_mem::find_dtb( uint32_t pid )
         if ( page[0] != 0xE9 )
             continue;
 
-        std::cout << "[phys_mem] low stub at phys 0x" << std::hex << pa << std::dec << std::endl;
-
-        std::cout << "[phys_mem] page-aligned QWORDs in stub:" << std::endl;
-        for ( uint32_t off = 0x08; off < 0x200; off += 0x08 )
-        {
-            uint64_t val = *reinterpret_cast<uint64_t*>( page + off );
-            if ( val && ( val & 0xFFF ) == 0 && val < 0x10000000ULL )
-                std::cout << "  +0x" << std::hex << off << ": 0x" << val << std::dec << std::endl;
-        }
+        con.print( "low stub at phys 0x{:X}", pa );
 
         for ( uint32_t off = 0x08; off < 0x200; off += 0x08 )
         {
@@ -99,7 +87,7 @@ uint64_t phys_mem::find_dtb( uint32_t pid )
 
             if ( !candidate || ( candidate & 0xFFF ) != 0 )
                 continue;
-            if ( candidate > 0x1000000ULL )  // 16MB
+            if ( candidate > 0x1000000ULL )
                 continue;
 
             auto phys = translate( candidate, ntos_base );
@@ -113,8 +101,7 @@ uint64_t phys_mem::find_dtb( uint32_t pid )
             if ( mz[0] == 'M' && mz[1] == 'Z' )
             {
                 system_cr3 = candidate;
-                std::cout << "[phys_mem] system CR3: 0x" << std::hex << candidate
-                          << " (stub offset 0x" << off << ")" << std::dec << std::endl;
+                con.success( "system CR3: 0x{:X} (offset 0x{:X})", candidate, off );
                 break;
             }
         }
@@ -122,42 +109,37 @@ uint64_t phys_mem::find_dtb( uint32_t pid )
 
     if ( !system_cr3 )
     {
-        std::cerr << "[phys_mem] could not find system CR3 in low stub." << std::endl;
+        con.warn( "could not find system CR3." );
         return 0;
     }
 
-    // resolve PsInitialSystemProcess -> System EPROCESS
     auto ps_initial_rva = get_ntos_export_rva( "PsInitialSystemProcess" );
     if ( !ps_initial_rva )
     {
-        std::cerr << "[phys_mem] could not resolve PsInitialSystemProcess." << std::endl;
+        con.warn( "could not resolve PsInitialSystemProcess." );
         return 0;
     }
 
     uint64_t system_eprocess = 0;
     if ( !read_virtual( system_cr3, ntos_base + ps_initial_rva, &system_eprocess, sizeof( system_eprocess ) ) )
     {
-        std::cerr << "[phys_mem] could not read PsInitialSystemProcess." << std::endl;
+        con.warn( "could not read PsInitialSystemProcess." );
         return 0;
     }
-    std::cout << "[phys_mem] System EPROCESS: 0x" << std::hex << system_eprocess << std::dec << std::endl;
+    con.print( "system EPROCESS: 0x{:X}", system_eprocess );
 
-    // get EPROCESS offsets
     auto pid_offset = get_pid_offset( );
     if ( !pid_offset )
     {
-        std::cerr << "[phys_mem] could not determine UniqueProcessId offset." << std::endl;
+        con.warn( "could not determine UniqueProcessId offset." );
         return 0;
     }
 
     uint32_t links_offset = pid_offset + 8;
     constexpr uint32_t dtb_offset = 0x28;
 
-    std::cout << "[phys_mem] offsets: PID=0x" << std::hex << pid_offset
-              << " Links=0x" << links_offset
-              << " DTB=0x" << dtb_offset << std::dec << std::endl;
+    con.print( "offsets: PID=0x{:X} Links=0x{:X} DTB=0x{:X}", pid_offset, links_offset, dtb_offset );
 
-    // walk EPROCESS linked list to find cs2 PID
     uint64_t current = system_eprocess;
     int count = 0;
 
@@ -174,15 +156,13 @@ uint64_t phys_mem::find_dtb( uint32_t pid )
             uint64_t dtb = 0;
             if ( !read_virtual( system_cr3, current + dtb_offset, &dtb, sizeof( dtb ) ) )
             {
-                std::cerr << "[phys_mem] found EPROCESS but could not read DTB." << std::endl;
+                con.warn( "found EPROCESS but could not read DTB." );
                 return 0;
             }
 
             dtb &= ~0x3ULL;
 
-            std::cout << "[phys_mem] found target EPROCESS: 0x" << std::hex << current
-                      << ", DTB: 0x" << dtb << std::dec
-                      << " (" << count << " processes checked)" << std::endl;
+            con.success( "EPROCESS: 0x{:X}, DTB: 0x{:X} ({} processes)", current, dtb, count );
             return dtb;
         }
 
@@ -194,7 +174,7 @@ uint64_t phys_mem::find_dtb( uint32_t pid )
 
     } while ( current != system_eprocess && current != 0 && count < 1000 );
 
-    std::cerr << "[phys_mem] PID " << pid << " not found (" << count << " processes checked)." << std::endl;
+    con.warn( "PID {} not found ({} processes checked).", pid, count );
     return 0;
 }
 

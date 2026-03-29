@@ -43,10 +43,12 @@
     <ClCompile Include="main.cpp" />
     <ClCompile Include="driver.cpp" />
     <ClCompile Include="phys_mem.cpp" />
+    <ClCompile Include="console.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="driver.hpp" />
     <ClInclude Include="phys_mem.hpp" />
+    <ClInclude Include="console.hpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>
